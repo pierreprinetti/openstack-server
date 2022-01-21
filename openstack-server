@@ -41,6 +41,13 @@ declare \
 	server_image=''  \
 	key_name=''      \
 	external_network='external'
+
+declare -r config_file="${XDG_CONFIG_HOME:-${HOME}/.config}/openstack-server/${OS_CLOUD}.conf"
+if [[ -f "$config_file" ]]; then
+	>&2 echo "Config file found. Sourcing '${config_file}'..."
+	# shellcheck disable=SC1090
+	source "$config_file"
+fi
 while getopts pf:i:e:k:h opt; do
 	case "$opt" in
 		p) persistent='yes'           ;;

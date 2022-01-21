@@ -23,8 +23,8 @@ openstack-server [-p] -f <flavor> -i <image> -e <external network> -k <key> <NAM
 
 ## Persistent configuration
 
-The script will source a file in `${XDG_CONFIG_HOME:-${HOME}/.config}/openstack-server/${OS_CLOUD}.conf` before running.
-Any options passed as flags will override the sourced configuration.
+The script will source a file in `${XDG_CONFIG_HOME:-${HOME}/.config}/openstack-server/${OS_CLOUD}.conf` before running, if it exists.
+Any option passed through the configuration file are not required any more. Any options passed as flags will override the sourced configuration.
 
 Here is an example valid configuration file:
 

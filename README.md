@@ -1,3 +1,7 @@
+This is a mirror of https://codeberg.org/pierreprinetti/openstack-server
+
+---
+
 # openstack-server
 
 A convenience script for creating a server in your OpenStack cloud, in its own

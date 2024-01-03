@@ -31,15 +31,17 @@ print_help() {
 	echo -e '\tNAME: name to give to the OpenStack resources.'
 	echo
 	echo -e 'Optional parameters:'
+	echo -e '\t-d\tUser data to pass to the server on creation.'
 	echo -e '\t-p\tDo not clean up the server after creation'
 	echo -e '\t\t(will print a cleanup script instead of executing it).'
 }
 
 declare \
-	persistent=''    \
-	server_flavor='' \
-	server_image=''  \
-	key_name=''      \
+	persistent=''         \
+	server_flavor=''      \
+	server_image=''       \
+	key_name=''           \
+	user_data='/dev/null' \
 	external_network='external'
 
 declare -r config_file="${XDG_CONFIG_HOME:-${HOME}/.config}/openstack-server/${OS_CLOUD}.conf"
@@ -48,13 +50,14 @@ if [[ -f "$config_file" ]]; then
 	# shellcheck disable=SC1090
 	source "$config_file"
 fi
-while getopts pf:i:e:k:h opt; do
+while getopts pf:i:e:k:d:h opt; do
 	case "$opt" in
 		p) persistent='yes'           ;;
 		f) server_flavor="$OPTARG"    ;;
 		i) server_image="$OPTARG"     ;;
 		e) external_network="$OPTARG" ;;
 		k) key_name="$OPTARG"         ;;
+		d) user_data="$OPTARG"        ;;
 		h) print_help; exit 0         ;;
 		*) exit 1                     ;;
 	esac
@@ -162,6 +165,7 @@ server_id="$(openstack server create -f value -c id \
 		--nic "port-id=$port_id" \
 		--security-group "$sg_id" \
 		--key-name "$key_name" \
+		--user-data "$user_data" \
 		"$name")"
 >&2 echo "Created server ${server_id}"
 

@@ -20,11 +20,12 @@ openstack-server [-p] -f <flavor> -i <image> -e <external network> -k <key> <NAM
 **Optional parameters:**
 
 * `-p`: Do not clean up the server after creation (will print a cleanup script instead of executing it)
+* `-z`: AWS Route53 zone ID. If provided, the script will attempt using the aws client to set up a DNS record
 
 ## Persistent configuration
 
 The script will source a file in `${XDG_CONFIG_HOME:-${HOME}/.config}/openstack-server/${OS_CLOUD}.conf` before running, if it exists.
-Any option passed through the configuration file are not required any more. Any options passed as flags will override the sourced configuration.
+Any options passed through the configuration file are not required any more. Any options passed as flags will override the sourced configuration.
 
 Here is an example valid configuration file:
 
@@ -33,4 +34,5 @@ server_flavor=m1.xlarge
 server_image=fedora-35
 external_network=external
 key_name=mykey
+aws_zone_id=/hostedzone/Z0H230324HJKGFD9HK345
 ```

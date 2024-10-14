@@ -33,6 +33,7 @@ print_help() {
 	echo -e 'Optional parameters:'
 	echo -e '\t-d\tUser data to pass to the server on creation.'
 	echo -e '\t-p\tDo not clean up the server after creation'
+	echo -e '\t-z\tAWS Route53 zone ID. If provided, the script will attempt using the aws client to set up a DNS record'
 	echo -e '\t\t(will print a cleanup script instead of executing it).'
 }
 
@@ -42,6 +43,7 @@ declare \
 	server_image=''       \
 	key_name=''           \
 	user_data='/dev/null' \
+	aws_zone_id=''        \
 	external_network='external'
 
 declare -r config_file="${XDG_CONFIG_HOME:-${HOME}/.config}/openstack-server/${OS_CLOUD}.conf"
@@ -50,7 +52,7 @@ if [[ -f "$config_file" ]]; then
 	# shellcheck disable=SC1090
 	source "$config_file"
 fi
-while getopts pf:i:e:k:d:h opt; do
+while getopts pf:i:e:k:d:z:h opt; do
 	case "$opt" in
 		p) persistent='yes'           ;;
 		f) server_flavor="$OPTARG"    ;;
@@ -58,6 +60,7 @@ while getopts pf:i:e:k:d:h opt; do
 		e) external_network="$OPTARG" ;;
 		k) key_name="$OPTARG"         ;;
 		d) user_data="$OPTARG"        ;;
+		z) aws_zone_id="$OPTARG"      ;;
 		h) print_help; exit 0         ;;
 		*) exit 1                     ;;
 	esac
@@ -82,7 +85,13 @@ declare \
 	router_id=''  \
 	port_id=''    \
 	server_id=''  \
-	fip_id=''
+	fip_id=''     \
+	fip_ip=''     \
+	aws_domain=''
+
+if [[ -n "$aws_zone_id" ]]; then
+	aws_domain="$(aws route53 get-hosted-zone --id "${aws_zone_id}" | jq '.HostedZone.Name' -r)"
+fi
 
 cleanup() {
 	>&2 echo
@@ -110,6 +119,34 @@ cleanup() {
 	if [ -n "$sg_id" ]; then
 		openstack security group delete "$sg_id" || >&2 echo "Failed to delete security group $sg_id"
 	fi
+
+	if [[ -n "$aws_zone_id" ]]; then
+		declare record_name="${name}.${aws_domain}"
+
+		aws route53 change-resource-record-sets \
+			--hosted-zone-id="$aws_zone_id" \
+			--change-batch='
+				{
+				  "Comment": "Delete the record for '"$record_name"'",
+				  "Changes": [
+				    {
+				      "Action": "DELETE",
+				      "ResourceRecordSet": {
+					"Name": "'"$record_name"'",
+					"Type": "A",
+					"TTL": 60,
+					"ResourceRecords": [
+					  {
+					    "Value": "'"$fip_ip"'"
+					  }
+					]
+				      }
+				    }
+				  ]
+				}
+			'
+	fi
+
 	>&2 echo 'Cleanup done.'
 }
 
@@ -174,6 +211,36 @@ fip_id="$(openstack floating ip create -f value -c id \
 		"$external_network")"
 >&2 echo "Created floating IP ${fip_id} $(openstack floating ip show -f value -c floating_ip_address "$fip_id")"
 openstack server add floating ip "$server_id" "$fip_id"
+
+if [[ -n "$aws_zone_id" ]]; then
+	fip_ip="$(openstack floating ip show -f value -c 'floating_ip_address' "${fip_id}")"
+
+	declare record_name="${name}.${aws_domain}"
+
+	aws route53 change-resource-record-sets \
+		--hosted-zone-id="$aws_zone_id" \
+		--change-batch='
+			{
+			  "Comment": "Upsert the record for '"$record_name"'",
+			  "Changes": [
+			    {
+			      "Action": "UPSERT",
+			      "ResourceRecordSet": {
+				"Name": "'"$record_name"'",
+				"Type": "A",
+				"TTL": 60,
+				"ResourceRecords": [
+				  {
+				    "Value": "'"$fip_ip"'"
+				  }
+				]
+			      }
+			    }
+			  ]
+			}
+		'
+	>&2 echo "DNS record created: ${record_name} IN A ${fip_ip}"
+fi
 
 if [ "$persistent" == 'yes' ]; then
 	>&2 echo "Server created."
